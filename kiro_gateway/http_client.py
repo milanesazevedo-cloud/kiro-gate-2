@@ -172,7 +172,7 @@ class KiroHttpClient:
         # Все попытки исчерпаны
         raise HTTPException(
             status_code=502,
-            detail=f"Не удалось выполнить запрос после {MAX_RETRIES} попыток: {last_error}"
+            detail=f"Failed to complete request after {MAX_RETRIES} attempts: {last_error}"
         )
     
     async def __aenter__(self) -> "KiroHttpClient":

@@ -222,7 +222,7 @@ class KiroAuthManager:
             httpx.HTTPError: При ошибке HTTP запроса
         """
         if not self._refresh_token:
-            raise ValueError("Refresh token не установлен")
+            raise ValueError("Refresh token is not set")
         
         logger.info("Refreshing Kiro token...")
         
@@ -243,7 +243,7 @@ class KiroAuthManager:
         new_profile_arn = data.get("profileArn")
         
         if not new_access_token:
-            raise ValueError(f"Ответ не содержит accessToken: {data}")
+            raise ValueError(f"Response does not contain accessToken: {data}")
         
         # Обновляем данные
         self._access_token = new_access_token
@@ -282,7 +282,7 @@ class KiroAuthManager:
                 await self._refresh_token_request()
             
             if not self._access_token:
-                raise ValueError("Не удалось получить access token")
+                raise ValueError("Failed to obtain access token")
             
             return self._access_token
     

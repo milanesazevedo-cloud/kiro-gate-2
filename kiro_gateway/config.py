@@ -155,7 +155,7 @@ DEBUG_DIR: str = os.getenv("DEBUG_DIR", "debug_logs")
 
 APP_VERSION: str = "2.0.0"
 APP_TITLE: str = "Kiro API Gateway"
-APP_DESCRIPTION: str = "OpenAI-совместимый интерфейс для Kiro API (AWS CodeWhisperer)."
+APP_DESCRIPTION: str = "OpenAI-compatible interface for Kiro API (AWS CodeWhisperer)."
 
 
 def get_kiro_refresh_url(region: str) -> str:

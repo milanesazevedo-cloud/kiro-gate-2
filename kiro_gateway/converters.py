@@ -280,7 +280,7 @@ def build_kiro_payload(
     merged_messages = merge_adjacent_messages(non_system_messages)
     
     if not merged_messages:
-        raise ValueError("Нет сообщений для отправки")
+        raise ValueError("No messages to send")
     
     # Получаем внутренний ID модели
     model_id = get_internal_model_id(request_data.model)
