@@ -43,7 +43,7 @@ from kiro.models_openai import (
     ModelList,
     ChatCompletionRequest,
 )
-from kiro.auth import KiroAuthManager, AuthType
+from kiro.auth import KiroAuthManager, MultiTokenAuthManager, AuthType
 from kiro.cache import ModelInfoCache
 from kiro.model_resolver import ModelResolver
 from kiro.converters_openai import build_kiro_payload
@@ -419,3 +419,32 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
+# --- Multi-Account Status Endpoint ---
+@router.get("/v1/accounts/status", tags=["Admin"])
+async def get_accounts_status(request: Request):
+    """
+    Get status of all accounts in multi-account mode.
+
+    Returns health status and statistics for each token.
+    Requires proxy authentication.
+    """
+    auth_manager = request.state.auth_manager
+
+    if isinstance(auth_manager, MultiTokenAuthManager):
+        token_status = auth_manager.get_token_status()
+        return {
+            "mode": "multi-account",
+            "total_tokens": len(token_status),
+            "healthy_tokens": sum(1 for t in token_status if not t["is_failed"]),
+            "accounts": token_status,
+        }
+    else:
+        # Single account mode - return basic info
+        return {
+            "mode": "single-account",
+            "auth_type": auth_manager.auth_type.value,
+            "region": auth_manager.region,
+            "has_token": bool(auth_manager._access_token) if hasattr(auth_manager, '_access_token') else False,
+        }

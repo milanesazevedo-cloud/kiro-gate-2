@@ -127,6 +127,28 @@ VPN_PROXY_URL: str = os.getenv("VPN_PROXY_URL", "")
 # Refresh token for updating access token
 REFRESH_TOKEN: str = os.getenv("REFRESH_TOKEN", "")
 
+# Multiple refresh tokens for multi-account mode
+# Format: comma-separated list: token1,token2,token3
+_REFRESH_TOKEN_RAW: str = os.getenv("REFRESH_TOKEN", "")
+REFRESH_TOKENS: list = [
+    t.strip() for t in _REFRESH_TOKEN_RAW.split(",") if t.strip()
+]
+
+# Add numbered tokens (REFRESH_TOKEN1, REFRESH_TOKEN2, etc.) for backward compatibility
+for i in range(1, 10):
+    token_name = f"REFRESH_TOKEN{i}"
+    token_value = os.getenv(token_name)
+    if token_value and token_value.strip():
+        token_value = token_value.strip()
+        if token_value not in REFRESH_TOKENS:
+            REFRESH_TOKENS.append(token_value)
+
+# Legacy single token support
+REFRESH_TOKEN: str = REFRESH_TOKENS[0] if REFRESH_TOKENS else ""
+
+# Background refresh interval for multi-account mode (seconds)
+BACKGROUND_REFRESH_INTERVAL: int = int(os.getenv("BACKGROUND_REFRESH_INTERVAL", "1800"))
+
 # Profile ARN for AWS CodeWhisperer
 PROFILE_ARN: str = os.getenv("PROFILE_ARN", "")
 

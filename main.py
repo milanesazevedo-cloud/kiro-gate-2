@@ -57,6 +57,7 @@ from kiro.config import (
     APP_DESCRIPTION,
     APP_VERSION,
     REFRESH_TOKEN,
+    REFRESH_TOKENS,
     PROFILE_ARN,
     REGION,
     KIRO_CREDS_FILE,
@@ -75,7 +76,7 @@ from kiro.config import (
     VPN_PROXY_URL,
     _warn_timeout_configuration,
 )
-from kiro.auth import KiroAuthManager
+from kiro.auth import KiroAuthManager, MultiTokenAuthManager
 from kiro.cache import ModelInfoCache
 from kiro.model_resolver import ModelResolver
 from kiro.routes_openai import router as openai_router
@@ -336,14 +337,26 @@ async def lifespan(app: FastAPI):
     logger.info("Shared HTTP client created with connection pooling")
     
     # Create AuthManager
-    # Priority: SQLite DB > JSON file > environment variables
-    app.state.auth_manager = KiroAuthManager(
-        refresh_token=REFRESH_TOKEN,
-        profile_arn=PROFILE_ARN,
-        region=REGION,
-        creds_file=KIRO_CREDS_FILE if KIRO_CREDS_FILE else None,
-        sqlite_db=KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else None,
-    )
+    # Multi-account mode: if multiple tokens are configured, use MultiTokenAuthManager
+    if len(REFRESH_TOKENS) > 1:
+        logger.info(f"Multi-account mode: initializing with {len(REFRESH_TOKENS)} tokens")
+        app.state.auth_manager = MultiTokenAuthManager(
+            refresh_tokens=REFRESH_TOKENS,
+            profile_arn=PROFILE_ARN,
+            region=REGION,
+        )
+        # Start background refresh for all tokens
+        app.state.auth_manager.start_background_refresh()
+    else:
+        # Single-account mode: Priority SQLite DB > JSON file > environment variables
+        logger.info("Single-account mode")
+        app.state.auth_manager = KiroAuthManager(
+            refresh_token=REFRESH_TOKEN,
+            profile_arn=PROFILE_ARN,
+            region=REGION,
+            creds_file=KIRO_CREDS_FILE if KIRO_CREDS_FILE else None,
+            sqlite_db=KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else None,
+        )
     
     # Create model cache
     app.state.model_cache = ModelInfoCache()
@@ -417,9 +430,16 @@ async def lifespan(app: FastAPI):
         logger.debug(f"Models hidden from list: {HIDDEN_FROM_LIST}")
     
     yield
-    
+
     # Graceful shutdown
     logger.info("Shutting down application...")
+    try:
+        # Stop background refresh if using MultiTokenAuthManager
+        if hasattr(app.state.auth_manager, 'stop_background_refresh'):
+            await app.state.auth_manager.stop_background_refresh()
+    except Exception as e:
+        logger.warning(f"Error stopping background refresh: {e}")
+
     try:
         await app.state.http_client.aclose()
         logger.info("Shared HTTP client closed")
