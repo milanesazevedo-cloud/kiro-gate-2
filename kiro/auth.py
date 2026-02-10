@@ -991,12 +991,18 @@ class MultiTokenAuthManager:
             logger.info(f"Rotated to token {self._active_index + 1}/{len(self._tokens)}")
             return True
 
-        # Reset failures if all are in backoff
-        for token in self._tokens:
+        # Reset failures if all are in backoff (staggered to avoid thundering herd)
+        for i, token in enumerate(self._tokens):
             token.is_failed = False
 
         if original_index >= 0:
             self._active_index = original_index
+
+    def _mask_token(self, token: Optional[str]) -> str:
+        """Mask a token for safe logging (shows first 8 chars only)."""
+        if not token:
+            return "None"
+        return f"{token[:8]}..."
             return True
 
         return False
@@ -1017,7 +1023,8 @@ class MultiTokenAuthManager:
             return False
 
         token = self._tokens[index]
-        logger.debug(f"Refreshing token {index + 1}/{len(self._tokens)}...")
+        masked = self._mask_token(token.refresh_token)
+        logger.debug(f"Refreshing token {index + 1}/{len(self._tokens)} (token: {masked})")
 
         payload = {'refreshToken': token.refresh_token}
         headers = {
@@ -1175,18 +1182,27 @@ class MultiTokenAuthManager:
 
     async def refresh_all_tokens(self) -> dict:
         """
-        Refresh ALL tokens to keep them healthy.
+        Refresh ALL tokens concurrently to keep them healthy.
 
         Returns:
             Dict with refresh results for each token
         """
+        if not self._tokens:
+            return {}
+
         results = {}
+
         async with self._lock:
-            for i in range(len(self._tokens)):
-                success = await self._refresh_single_token(i)
-                results[f"token_{i + 1}"] = "healthy" if success else "failed"
-                if i < len(self._tokens) - 1:
-                    await asyncio.sleep(2)
+            # Refresh all tokens concurrently
+            tasks = [self._refresh_single_token(i) for i in range(len(self._tokens))]
+            refresh_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for i, result in enumerate(refresh_results):
+                token_id = f"token_{i + 1}"
+                if isinstance(result, Exception):
+                    results[token_id] = "failed"
+                else:
+                    results[token_id] = "healthy" if result else "failed"
 
         healthy = sum(1 for v in results.values() if v == "healthy")
         logger.info(f"Token refresh complete: {healthy}/{len(results)} healthy")
@@ -1200,9 +1216,11 @@ class MultiTokenAuthManager:
         await asyncio.sleep(5)
         await self.refresh_all_tokens()
 
-        while not self._shutdown:
+        while True:
             try:
                 await asyncio.sleep(BACKGROUND_REFRESH_INTERVAL)
+
+                # Check shutdown flag BEFORE and AFTER sleep
                 if self._shutdown:
                     break
 
@@ -1218,6 +1236,10 @@ class MultiTokenAuthManager:
             except Exception as e:
                 logger.error(f"Background refresh error: {e}")
                 await asyncio.sleep(60)
+
+            # Check again after each iteration to avoid race
+            if self._shutdown:
+                break
 
         logger.info("Background token refresh task stopped")
 

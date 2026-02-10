@@ -422,7 +422,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
 
 
 # --- Multi-Account Status Endpoint ---
-@router.get("/v1/accounts/status", tags=["Admin"])
+@router.get("/v1/accounts/status", tags=["Admin"], dependencies=[Depends(verify_api_key)])
 async def get_accounts_status(request: Request):
     """
     Get status of all accounts in multi-account mode.
@@ -430,7 +430,7 @@ async def get_accounts_status(request: Request):
     Returns health status and statistics for each token.
     Requires proxy authentication.
     """
-    auth_manager = request.state.auth_manager
+    auth_manager = request.app.state.auth_manager
 
     if isinstance(auth_manager, MultiTokenAuthManager):
         token_status = auth_manager.get_token_status()
@@ -442,9 +442,11 @@ async def get_accounts_status(request: Request):
         }
     else:
         # Single account mode - return basic info
+        # Access through method if available, otherwise use public attributes
+        has_token = getattr(auth_manager, '_access_token', None) is not None
         return {
             "mode": "single-account",
             "auth_type": auth_manager.auth_type.value,
             "region": auth_manager.region,
-            "has_token": bool(auth_manager._access_token) if hasattr(auth_manager, '_access_token') else False,
+            "has_token": has_token,
         }

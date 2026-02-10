@@ -96,7 +96,18 @@ SERVER_PORT: int = int(os.getenv("SERVER_PORT", str(DEFAULT_SERVER_PORT)))
 # ==================================================================================================
 
 # API key for proxy access (clients must pass it in Authorization header)
-PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
+# SECURITY: Must be configured by user - no default value for security
+_PROXY_API_KEY_ENV = os.getenv("PROXY_API_KEY")
+if _PROXY_API_KEY_ENV is None:
+    raise ValueError(
+        "PROXY_API_KEY environment variable must be set. "
+        "Copy .env.example to .env and configure your API key."
+    )
+if len(_PROXY_API_KEY_ENV) < 16:
+    raise ValueError(
+        "PROXY_API_KEY must be at least 16 characters long for security."
+    )
+PROXY_API_KEY: str = _PROXY_API_KEY_ENV
 
 # ==================================================================================================
 # VPN/Proxy Settings for Kiro API Access
@@ -124,26 +135,57 @@ VPN_PROXY_URL: str = os.getenv("VPN_PROXY_URL", "")
 # Kiro API Credentials
 # ==================================================================================================
 
-# Refresh token for updating access token
-REFRESH_TOKEN: str = os.getenv("REFRESH_TOKEN", "")
+def _validate_refresh_token(token: str) -> bool:
+    """
+    Validate refresh token format.
 
-# Multiple refresh tokens for multi-account mode
-# Format: comma-separated list: token1,token2,token3
-_REFRESH_TOKEN_RAW: str = os.getenv("REFRESH_TOKEN", "")
-REFRESH_TOKENS: list = [
-    t.strip() for t in _REFRESH_TOKEN_RAW.split(",") if t.strip()
-]
+    Args:
+        token: The refresh token to validate
 
-# Add numbered tokens (REFRESH_TOKEN1, REFRESH_TOKEN2, etc.) for backward compatibility
-for i in range(1, 10):
-    token_name = f"REFRESH_TOKEN{i}"
-    token_value = os.getenv(token_name)
-    if token_value and token_value.strip():
-        token_value = token_value.strip()
-        if token_value not in REFRESH_TOKENS:
-            REFRESH_TOKENS.append(token_value)
+    Returns:
+        True if valid, False otherwise
+    """
+    if not token:
+        return False
+    # Check minimum length and no internal whitespace
+    if len(token) < 10:
+        return False
+    if any(c.isspace() for c in token):
+        return False
+    return True
 
-# Legacy single token support
+
+def _parse_refresh_tokens() -> list:
+    """Parse and validate refresh tokens from environment."""
+    tokens = []
+
+    # From comma-separated list
+    _REFRESH_TOKEN_RAW: str = os.getenv("REFRESH_TOKEN", "")
+    for t in _REFRESH_TOKEN_RAW.split(","):
+        t = t.strip()
+        if t and _validate_refresh_token(t):
+            tokens.append(t)
+        elif t:
+            raise ValueError(f"Invalid refresh token format: '{t[:20]}...' (min 10 chars, no spaces)")
+
+    # From numbered tokens (REFRESH_TOKEN1, REFRESH_TOKEN2, etc.)
+    for i in range(1, 10):
+        token_name = f"REFRESH_TOKEN{i}"
+        token_value = os.getenv(token_name)
+        if token_value:
+            token_value = token_value.strip()
+            if not _validate_refresh_token(token_value):
+                raise ValueError(f"Invalid {token_name}: min 10 chars, no spaces")
+            if token_value not in tokens:
+                tokens.append(token_value)
+
+    return tokens
+
+
+# Parse and validate tokens
+REFRESH_TOKENS: list = _parse_refresh_tokens()
+
+# Legacy single token support (first token or empty)
 REFRESH_TOKEN: str = REFRESH_TOKENS[0] if REFRESH_TOKENS else ""
 
 # Background refresh interval for multi-account mode (seconds)
