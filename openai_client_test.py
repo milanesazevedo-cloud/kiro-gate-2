@@ -14,7 +14,7 @@ import sys
 # The gateway is OpenAI-compatible, so we use the same interface
 
 OPENAI_BASE_URL = "http://localhost:8000/v1"
-OPENAI_API_KEY = "my-secure-password-change-this-2024"  # PROXY_API_KEY from .env
+OPENAI_API_KEY = "meu-api-do-sucesso"
 
 def test_with_openai_library():
     """Test using the official OpenAI library."""

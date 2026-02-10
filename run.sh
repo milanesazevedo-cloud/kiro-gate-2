@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 PORT=${1:-8000}
-API_KEY="my-secure-password-change-this-2024"
+API_KEY="meu-api-do-sucesso"
 
 echo -e "${GREEN}====================================${NC}"
 echo -e "${GREEN}  Kiro Gateway - OpenAI Compatible${NC}"
