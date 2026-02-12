@@ -4,7 +4,7 @@ OpenAI/Anthropic compatible API proxy for Kiro (Amazon Q Developer) with multi-a
 
 ## 🚀 Features
 
-- **Multi-Account Support**: Round-robin rotation across 5+ Kiro accounts
+- **Multi-Account Support**: Round-robin rotation across multiple Kiro accounts
 - **Dual Authentication**: Works with both OpenAI (`Authorization: Bearer`) and Anthropic (`x-api-key`) style authentication
 - **Load Balancing**: Automatic distribution of requests across all configured accounts
 - **Failover Protection**: Automatic rotation to healthy accounts when one fails
@@ -12,22 +12,19 @@ OpenAI/Anthropic compatible API proxy for Kiro (Amazon Q Developer) with multi-a
 
 ## 🛠 Configuration
 
-The gateway is configured with 5 Kiro accounts:
-- 3 Google-authenticated accounts
-- 2 GitHub-authenticated accounts
+The gateway is configured with multiple Kiro accounts for load balancing and redundancy.
 
 ### Environment Variables
 
 ```bash
 # Required - API key for proxy authentication
-PROXY_API_KEY="sk-kiro-proxy-4f2e8d9c1a3b5e7f9d2c6a8b4e1f7a3c"
+PROXY_API_KEY="your-secret-api-key-here"
 
-# Multi-account configuration (5 accounts)
-REFRESH_TOKEN1="account1_refresh_token"
-REFRESH_TOKEN2="account2_refresh_token"
-REFRESH_TOKEN3="account3_refresh_token"
-REFRESH_TOKEN4="account4_refresh_token"
-REFRESH_TOKEN5="account5_refresh_token"
+# Multi-account configuration
+REFRESH_TOKEN1="first_account_refresh_token"
+REFRESH_TOKEN2="second_account_refresh_token"
+REFRESH_TOKEN3="third_account_refresh_token"
+# Add more tokens as needed
 
 # Background refresh interval (seconds)
 BACKGROUND_REFRESH_INTERVAL=600
@@ -36,8 +33,8 @@ BACKGROUND_REFRESH_INTERVAL=600
 ## 🎯 API Endpoints
 
 ### Authentication
-- **OpenAI-style**: `Authorization: Bearer {PROXY_API_KEY}`
-- **Anthropic-style**: `x-api-key: {PROXY_API_KEY}`
+- **OpenAI-style**: `Authorization: Bearer YOUR_API_KEY`
+- **Anthropic-style**: `x-api-key: YOUR_API_KEY`
 
 ### Endpoints
 - `GET /` - Basic health check
@@ -61,21 +58,14 @@ python main.py --port 9000
 
 ## 🔄 Multi-Account Benefits
 
-- **Increased Capacity**: 5x request limits across accounts
+- **Increased Capacity**: Multiple accounts increase total request limits
 - **Better Reliability**: Automatic failover between accounts
 - **Load Distribution**: Balanced usage across all accounts
 - **Automatic Refresh**: Background token refresh keeps accounts active
 
 ## 📊 Supported Models
 
-- `auto-kiro` - Automatic model selection
-- `claude-3.7-sonnet` - Claude Sonnet 3.7
-- `claude-haiku-4.5` - Claude Haiku 4.5 (fast)
-- `claude-sonnet-4` - Claude Sonnet 4
-- `claude-sonnet-4.5` - Claude Sonnet 4.5 (most capable)
-- `deepseek-3.2` - DeepSeek model
-- `minimax-m2.1` - Minimax model
-- `qwen3-coder-next` - Qwen3 Coder model
+The gateway provides access to various models through the Kiro API including Claude models and other providers.
 
 ## 🔧 Deployment
 
