@@ -14,17 +14,26 @@ if ! command -v scalingo &> /dev/null; then
     exit 1
 fi
 
-# Login to Scalingo using the provided token
-echo "🔑 Logging into Scalingo..."
-scalingo login --api-token tk-us-2rS9FtHDfCGvE8NaxRwo7AK9SQeCmRiomrJpSpQJV3dIf-Z9
+# Check if SCALINGO_API_TOKEN environment variable is set
+if [ -z "$SCALINGO_API_TOKEN" ]; then
+    echo "❌ SCALINGO_API_TOKEN environment variable not set."
+    echo "Please set it with: export SCALINGO_API_TOKEN=your_token_here"
+    echo "Or run with: SCALINGO_API_TOKEN=your_token_here ./deploy_scalingo.sh"
+    exit 1
+fi
 
-# Create app if it doesn't exist (uncomment and modify as needed)
-# echo "🏗️ Creating Scalingo app..."
-# scalingo create kiro-gateway
+# Login to Scalingo using the provided token from environment variable
+echo "🔑 Logging into Scalingo..."
+scalingo login --api-token "$SCALINGO_API_TOKEN"
 
 # Add remote if not already added
 echo "🔗 Adding Scalingo remote..."
-git remote add scalingo https://git.scalingo.com/kiro-gateway.git 2>/dev/null || echo "Remote already exists"
+if ! git remote get-url scalingo &> /dev/null; then
+    echo "Creating new Scalingo app..."
+    scalingo create kiro-gateway
+else
+    echo "Scalingo remote already exists"
+fi
 
 # Deploy to Scalingo
 echo "📦 Deploying to Scalingo..."
