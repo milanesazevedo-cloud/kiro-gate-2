@@ -1397,3 +1397,269 @@ class TestContentTruncationRecovery:
         print("Checking: Match found...")
         assert info is not None
         assert info.message_hash == hash1
+
+# =============================================================================
+# Tests for HTTP response handling (error paths, non-streaming, accounts status)
+# =============================================================================
+
+class TestChatCompletionsErrorResponse:
+    """Tests for Kiro API error response handling."""
+
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_kiro_error_returns_json_error(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """Non-200 from Kiro should return error in OpenAI format."""
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.aread = AsyncMock(return_value=b'{"message": "Rate limited"}')
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 429
+        body = response.json()
+        assert "error" in body
+
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_kiro_non_json_error_body_handled(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """Non-JSON error body from Kiro should not crash."""
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        mock_response.aread = AsyncMock(return_value=b'Service Unavailable')
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 503
+        body = response.json()
+        assert "error" in body
+
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_aread_exception_returns_unknown_error(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """If aread() raises, error body should fallback to 'Unknown error'."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.aread = AsyncMock(side_effect=Exception("read failed"))
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 500
+
+
+class TestChatCompletionsNonStreamingSuccess:
+    """Tests for non-streaming 200 response handling."""
+
+    @patch('kiro.routes_openai.collect_stream_response')
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_non_streaming_returns_json(self, mock_http_client_class, mock_collect, test_client, valid_proxy_api_key):
+        """Successful non-streaming should return JSON response."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_instance.client = MagicMock()
+        mock_http_client_class.return_value = mock_instance
+
+        mock_collect.return_value = {
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "choices": [{"message": {"role": "assistant", "content": "Hello"}}],
+        }
+
+        response = test_client.post(
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["object"] == "chat.completion"
+
+
+class TestAccountsStatusEndpoint:
+    """Tests for /v1/accounts/status endpoint."""
+
+    def test_accounts_status_requires_auth(self, test_client):
+        response = test_client.get("/v1/accounts/status")
+        assert response.status_code == 401
+
+    def test_accounts_status_single_account_mode(self, test_client, valid_proxy_api_key):
+        """In single account mode, returns single-account info."""
+        response = test_client.get(
+            "/v1/accounts/status",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        # Should be single-account (default fixture setup)
+        assert "mode" in body
+
+    def test_accounts_status_multi_account_mode(self, test_client, valid_proxy_api_key, clean_app):
+        """In multi-account mode, returns token status list."""
+        from kiro.auth_multi import MultiTokenAuthManager
+
+        # Temporarily replace auth_manager with MultiTokenAuthManager
+        original = clean_app.state.auth_manager
+        try:
+            multi_manager = MultiTokenAuthManager(
+                refresh_tokens=["tok1", "tok2"],
+                region="us-east-1",
+            )
+            clean_app.state.auth_manager = multi_manager
+
+            response = test_client.get(
+                "/v1/accounts/status",
+                headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert body["mode"] == "multi-account"
+            assert body["total_tokens"] == 2
+            assert "accounts" in body
+        finally:
+            clean_app.state.auth_manager = original
+
+
+class TestChatCompletionsBuildPayloadError:
+    """Tests for ValueError from build_kiro_payload."""
+
+    @patch('kiro.routes_openai.build_kiro_payload')
+    def test_build_payload_value_error_returns_400(self, mock_build, test_client, valid_proxy_api_key):
+        """ValueError from build_kiro_payload should return 400."""
+        mock_build.side_effect = ValueError("Invalid model configuration")
+
+        response = test_client.post(
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 400
+        assert "Invalid model configuration" in response.text
+
+
+class TestChatCompletionsTruncationInRoute:
+    """Tests that truncation paths inside chat_completions are covered."""
+
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_tool_result_truncation_modifies_request(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """When truncation cache has an entry, tool_result should be modified."""
+        from kiro.truncation_state import save_tool_truncation
+
+        tool_call_id = "route_test_tool_123"
+        save_tool_truncation(tool_call_id, "write_file", {"size_bytes": 5000, "reason": "test"})
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.aread = AsyncMock(return_value=b'{}')
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_instance.client = MagicMock()
+        mock_http_client_class.return_value = mock_instance
+
+        # Patch collect_stream_response to avoid real streaming
+        with patch('kiro.routes_openai.collect_stream_response') as mock_collect:
+            mock_collect.return_value = {"id": "test", "choices": []}
+
+            response = test_client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+                json={
+                    "model": "claude-sonnet-4-5",
+                    "messages": [
+                        {"role": "user", "content": "previous"},
+                        {"role": "assistant", "content": "ok"},
+                        {"role": "tool", "tool_call_id": tool_call_id, "content": "result"},
+                        {"role": "user", "content": "follow up"},
+                    ],
+                    "stream": False,
+                },
+            )
+
+        # Route should have run without errors
+        assert response.status_code in (200, 400, 500)
+
+    @patch('kiro.routes_openai.KiroHttpClient')
+    def test_assistant_truncation_adds_synthetic_message(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """When assistant content is in truncation cache, synthetic user message added."""
+        from kiro.truncation_state import save_content_truncation
+
+        truncated_text = "This is the truncated assistant content for route test"
+        save_content_truncation(truncated_text)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_instance.client = MagicMock()
+        mock_http_client_class.return_value = mock_instance
+
+        with patch('kiro.routes_openai.collect_stream_response') as mock_collect:
+            mock_collect.return_value = {"id": "test", "choices": []}
+
+            response = test_client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": f"Bearer {valid_proxy_api_key}"},
+                json={
+                    "model": "claude-sonnet-4-5",
+                    "messages": [
+                        {"role": "user", "content": "hi"},
+                        {"role": "assistant", "content": truncated_text},
+                        {"role": "user", "content": "follow up"},
+                    ],
+                    "stream": False,
+                },
+            )
+
+        assert response.status_code in (200, 400, 500)

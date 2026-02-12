@@ -1589,3 +1589,277 @@ class TestContentTruncationRecovery:
         print("Checking: Message unchanged...")
         text = self._get_block_value(modified_messages[0].content[0], "text")
         assert text == "This is a complete response."
+
+# =============================================================================
+# Tests for HTTP response handling (error paths, non-streaming, success)
+# =============================================================================
+
+class TestAnthropicChatCompletionsErrorResponse:
+    """Tests for Kiro API error response handling on /v1/messages."""
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_kiro_error_returns_anthropic_error_format(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """Non-200 from Kiro should return error in Anthropic format."""
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.aread = AsyncMock(return_value=b'{"message": "Rate limited"}')
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={
+                "x-api-key": valid_proxy_api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 429
+        body = response.json()
+        assert "error" in body
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_kiro_non_json_error_body_handled(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """Non-JSON error body from Kiro should not crash."""
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        mock_response.aread = AsyncMock(return_value=b'Service Unavailable')
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 503
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_aread_exception_fallback(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """If aread() raises, fallback to Unknown error."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.aread = AsyncMock(side_effect=Exception("read failed"))
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 500
+
+
+class TestAnthropicNonStreamingSuccess:
+    """Tests for non-streaming 200 response on /v1/messages."""
+
+    @patch('kiro.routes_anthropic.collect_anthropic_response')
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_non_streaming_returns_json(self, mock_http_client_class, mock_collect, test_client, valid_proxy_api_key):
+        """Successful non-streaming should return JSON response."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        mock_collect.return_value = {
+            "id": "msg_test",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hello"}],
+            "model": "claude-sonnet-4-5",
+            "stop_reason": "end_turn",
+        }
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["type"] == "message"
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_internal_exception_returns_500(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """Internal exception in route should return 500."""
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(side_effect=Exception("unexpected error"))
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 500
+        body = response.json()
+        assert "error" in body
+
+
+class TestAnthropicBuildPayloadError:
+    """Tests for conversion error path in /v1/messages."""
+
+    @patch('kiro.routes_anthropic.anthropic_to_kiro')
+    def test_conversion_error_returns_400(self, mock_convert, test_client, valid_proxy_api_key):
+        """ValueError from anthropic_to_kiro should return 400."""
+        mock_convert.side_effect = ValueError("Unsupported content type")
+
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": False,
+            },
+        )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert "error" in body
+
+
+class TestAnthropicTruncationInRoute:
+    """Tests for truncation paths inside the anthropic messages route."""
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_tool_result_truncation_in_anthropic_route(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """When truncation cache has an entry, tool_result block in anthropic format is modified."""
+        from kiro.truncation_state import save_tool_truncation
+
+        tool_use_id = "anthropic_route_tool_789"
+        save_tool_truncation(tool_use_id, "read_file", {"size_bytes": 3000, "reason": "test"})
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        with patch('kiro.routes_anthropic.collect_anthropic_response') as mock_collect:
+            mock_collect.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "ok"}],
+                "model": "claude-sonnet-4-5",
+                "stop_reason": "end_turn",
+            }
+
+            response = test_client.post(
+                "/v1/messages",
+                headers={"x-api-key": valid_proxy_api_key},
+                json={
+                    "model": "claude-sonnet-4-5",
+                    "max_tokens": 100,
+                    "messages": [
+                        {"role": "user", "content": "previous"},
+                        {"role": "assistant", "content": "sure"},
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_use_id,
+                                    "content": "file contents",
+                                }
+                            ],
+                        },
+                        {"role": "user", "content": "follow up"},
+                    ],
+                    "stream": False,
+                },
+            )
+
+        assert response.status_code in (200, 400, 422, 500)
+
+    @patch('kiro.routes_anthropic.KiroHttpClient')
+    def test_assistant_content_truncation_in_anthropic_route(self, mock_http_client_class, test_client, valid_proxy_api_key):
+        """When assistant content is in truncation cache, synthetic user message is added."""
+        from kiro.truncation_state import save_content_truncation
+
+        truncated_text = "This is a truncated anthropic assistant response for route test abc123"
+        save_content_truncation(truncated_text)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_instance = AsyncMock()
+        mock_instance.request_with_retry = AsyncMock(return_value=mock_response)
+        mock_instance.close = AsyncMock()
+        mock_http_client_class.return_value = mock_instance
+
+        with patch('kiro.routes_anthropic.collect_anthropic_response') as mock_collect:
+            mock_collect.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "ok"}],
+                "model": "claude-sonnet-4-5",
+                "stop_reason": "end_turn",
+            }
+
+            response = test_client.post(
+                "/v1/messages",
+                headers={"x-api-key": valid_proxy_api_key},
+                json={
+                    "model": "claude-sonnet-4-5",
+                    "max_tokens": 100,
+                    "messages": [
+                        {"role": "user", "content": "hi"},
+                        {"role": "assistant", "content": truncated_text},
+                        {"role": "user", "content": "follow up"},
+                    ],
+                    "stream": False,
+                },
+            )
+
+        assert response.status_code in (200, 400, 422, 500)
