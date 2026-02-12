@@ -16,7 +16,7 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from kiro.auth import MultiTokenAuthManager, TokenInfo
+from kiro.auth_multi import MultiTokenAuthManager, TokenInfo
 
 
 # ===========================================================================

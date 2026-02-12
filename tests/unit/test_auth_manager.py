@@ -12,7 +12,8 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 import httpx
 
-from kiro.auth import KiroAuthManager, AuthType
+from kiro.auth import KiroAuthManager
+from kiro.auth_multi import AuthType
 from kiro.config import TOKEN_REFRESH_THRESHOLD, get_aws_sso_oidc_url
 
 
