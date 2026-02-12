@@ -1249,19 +1249,20 @@ class TestTruncationRecoveryEdgeCases:
         assert stats["tool_truncations"] >= 1
         
         print("Action: Disabling recovery...")
+        from importlib import reload
+        from kiro import config as kiro_config
+
         with patch.dict(os.environ, {"TRUNCATION_RECOVERY": "false"}):
-            from importlib import reload
-            from kiro import config
-            reload(config)
-            
+            reload(kiro_config)
+
             print("Action: Processing tool_result with recovery disabled...")
             from kiro.truncation_recovery import should_inject_recovery
             from kiro.truncation_state import get_tool_truncation
-            
+
             messages = [
                 ChatMessage(role="tool", tool_call_id=tool_call_id, content="Result")
             ]
-            
+
             modified_messages = []
             for msg in messages:
                 if msg.role == "tool" and msg.tool_call_id and should_inject_recovery():
@@ -1270,11 +1271,14 @@ class TestTruncationRecoveryEdgeCases:
                     if truncation_info:
                         pass
                 modified_messages.append(msg)
-            
+
             print("Checking: No modification occurred...")
             assert modified_messages[0].content == "Result"
             assert "[API Limitation]" not in modified_messages[0].content
-        
+
+        # Reload config to restore original state (prevent cross-test pollution)
+        reload(kiro_config)
+
         print("Checking: Cache entry still exists (not cleaned up)...")
         # Note: get_tool_truncation() was NOT called, so entry should still be there
         # But we can't verify this without calling get_tool_truncation again
