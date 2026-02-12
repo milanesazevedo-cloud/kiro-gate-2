@@ -37,7 +37,7 @@ import httpx
 from fastapi import HTTPException
 from loguru import logger
 
-from kiro.config import MAX_RETRIES, BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, STREAMING_READ_TIMEOUT
+from kiro.config import MAX_RETRIES, BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, STREAMING_READ_TIMEOUT, STREAMING_TOKEN_BUFFER
 from kiro.auth import KiroAuthManager
 from kiro.utils import get_kiro_headers
 from kiro.network_errors import classify_network_error, get_short_error_message, NetworkErrorInfo
@@ -200,17 +200,28 @@ class KiroHttpClient:
         # Determine the number of retry attempts
         # FIRST_TOKEN_TIMEOUT is used in streaming_openai.py, not here
         max_retries = FIRST_TOKEN_MAX_RETRIES if stream else MAX_RETRIES
-        
+
         client = await self._get_client(stream=stream)
         last_error = None
         last_error_info: Optional[NetworkErrorInfo] = None
-        
+
         for attempt in range(max_retries):
             try:
                 # Get current token
                 token = await self.auth_manager.get_access_token()
                 headers = get_kiro_headers(self.auth_manager, token)
-                
+
+                # Pre-refresh for streaming: ensure token is fresh enough for long requests
+                if stream:
+                    # Check if token will last through the expected streaming duration
+                    # STREAMING_READ_TIMEOUT + STREAMING_TOKEN_BUFFER should cover most requests
+                    if hasattr(self.auth_manager, 'is_token_fresh_for_streaming'):
+                        required_validity = STREAMING_READ_TIMEOUT + STREAMING_TOKEN_BUFFER
+                        if not self.auth_manager.is_token_fresh_for_streaming(required_validity):
+                            logger.debug("Token not fresh enough for streaming, refreshing...")
+                            token = await self.auth_manager.force_refresh()
+                            headers = get_kiro_headers(self.auth_manager, token)
+
                 if stream:
                     # Prevent CLOSE_WAIT connection leak (issue #38)
                     headers["Connection"] = "close"

@@ -357,7 +357,9 @@ async def lifespan(app: FastAPI):
             creds_file=KIRO_CREDS_FILE if KIRO_CREDS_FILE else None,
             sqlite_db=KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else None,
         )
-    
+        # Start background refresh for single-token mode too
+        app.state.auth_manager.start_background_refresh()
+
     # Create model cache
     app.state.model_cache = ModelInfoCache()
     

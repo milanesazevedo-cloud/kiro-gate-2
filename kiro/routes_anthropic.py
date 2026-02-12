@@ -244,7 +244,7 @@ async def messages(
         modified_messages.append(msg)
     
     if tool_results_modified > 0 or content_notices_added > 0:
-        request_data.messages = modified_messages
+        request_data = request_data.model_copy(update={"messages": modified_messages})
         logger.info(f"Truncation recovery: modified {tool_results_modified} tool_result(s), added {content_notices_added} content notice(s)")
     
     # Generate conversation ID for Kiro API (random UUID, not used for tracking)

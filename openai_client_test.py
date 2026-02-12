@@ -13,8 +13,11 @@ import sys
 # Configure OpenAI client to use Kiro Gateway
 # The gateway is OpenAI-compatible, so we use the same interface
 
-OPENAI_BASE_URL = "http://localhost:8000/v1"
-OPENAI_API_KEY = "meu-api-do-sucesso"
+OPENAI_BASE_URL = os.environ.get("GATEWAY_BASE_URL", "http://localhost:8000/v1")
+OPENAI_API_KEY = os.environ.get("PROXY_API_KEY", "")
+if not OPENAI_API_KEY:
+    print("ERROR: PROXY_API_KEY environment variable not set")
+    sys.exit(1)
 
 def test_with_openai_library():
     """Test using the official OpenAI library."""

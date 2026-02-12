@@ -32,7 +32,7 @@ services:
       - REFRESH_TOKEN=${REFRESH_TOKEN:-}
 
       # Background refresh interval (seconds)
-      - BACKGROUND_REFRESH_INTERVAL=${BACKGROUND_REFRESH_INTERVAL:-1800}
+      - BACKGROUND_REFRESH_INTERVAL=${BACKGROUND_REFRESH_INTERVAL:-600}
 
       # VPN/Proxy settings
       - VPN_PROXY_URL=${VPN_PROXY_URL:-}

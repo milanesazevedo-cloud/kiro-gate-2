@@ -7,7 +7,6 @@ Provides test isolation from external services and global state.
 All tests MUST be completely isolated from the network.
 """
 
-import asyncio
 import json
 import pytest
 import time
@@ -17,23 +16,6 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi.testclient import TestClient
-
-
-# =============================================================================
-# Event Loop Fixtures
-# =============================================================================
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """
-    Creates an event loop for the entire test session.
-    Required for proper async fixture operation.
-    """
-    print("Creating event loop for test session...")
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    print("Closing event loop...")
-    loop.close()
 
 
 # =============================================================================

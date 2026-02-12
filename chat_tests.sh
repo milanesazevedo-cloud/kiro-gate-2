@@ -3,7 +3,7 @@
 # Usage: ./chat_tests.sh
 
 KIRO_URL="http://localhost:8000"
-API_KEY="meu-api-do-sucesso"
+API_KEY="${PROXY_API_KEY:?PROXY_API_KEY environment variable not set}"
 
 echo "=========================================="
 echo "  Kiro Gateway - Chat Tests"

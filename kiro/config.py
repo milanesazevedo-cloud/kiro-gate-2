@@ -71,9 +71,10 @@ def _get_raw_env_value(var_name: str, env_file: str = ".env") -> Optional[str]:
             if match:
                 # Return value as-is, without processing escape sequences
                 return match.group(2)
-    except Exception:
-        pass
-    
+    except Exception as e:
+        import logging
+        logging.debug(f"Could not read {var_name} from .env file: {e}")
+
     return None
 
 # ==================================================================================================
@@ -189,7 +190,9 @@ REFRESH_TOKENS: list = _parse_refresh_tokens()
 REFRESH_TOKEN: str = REFRESH_TOKENS[0] if REFRESH_TOKENS else ""
 
 # Background refresh interval for multi-account mode (seconds)
-BACKGROUND_REFRESH_INTERVAL: int = int(os.getenv("BACKGROUND_REFRESH_INTERVAL", "1800"))
+# Default: 600 seconds (10 minutes) - more aggressive to prevent token expiry during requests
+# Tokens expire in ~60 minutes, so we refresh well before that
+BACKGROUND_REFRESH_INTERVAL: int = int(os.getenv("BACKGROUND_REFRESH_INTERVAL", "600"))
 
 # Profile ARN for AWS CodeWhisperer
 PROFILE_ARN: str = os.getenv("PROFILE_ARN", "")
@@ -400,6 +403,12 @@ FIRST_TOKEN_TIMEOUT: float = float(os.getenv("FIRST_TOKEN_TIMEOUT", "15"))
 # while "thinking" (especially for tool calls or complex reasoning).
 # Default: 300 seconds (5 minutes) - generous timeout to avoid premature disconnects.
 STREAMING_READ_TIMEOUT: float = float(os.getenv("STREAMING_READ_TIMEOUT", "300"))
+
+# Expected streaming duration buffer (seconds).
+# When starting a streaming request, we ensure the token is valid for at least this
+# much longer than STREAMING_READ_TIMEOUT to account for token expiration during streaming.
+# Default: 600 seconds (10 minutes) - enough buffer for long-running requests.
+STREAMING_TOKEN_BUFFER: float = float(os.getenv("STREAMING_TOKEN_BUFFER", "600"))
 
 # Maximum number of attempts on first token timeout.
 # After exhausting all attempts, an error will be returned.
