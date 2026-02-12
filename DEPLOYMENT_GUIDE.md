@@ -6,21 +6,27 @@
 - Scalingo account
 - GitHub account with repository access
 - Kiro Gateway repository (this one)
+- Scalingo CLI installed locally
 
-### 2. Create Scalingo App
+### 2. Install Scalingo CLI
+```bash
+curl -O https://cli-dl.scalingo.io/install && bash install
+```
+
+### 3. Create Scalingo App
 1. Log into [Scalingo Dashboard](https://my.scalingo.com/apps)
 2. Click "Create App"
 3. Choose a name for your app (e.g., `kiro-gateway`)
 4. Select the region closest to your users
 
-### 3. Connect to GitHub Repository
+### 4. Connect to GitHub Repository
 1. In your Scalingo app dashboard, go to "Deployment" tab
 2. Select "GitHub" as deployment method
 3. Connect your GitHub account if not already connected
 4. Select your repository (`milanesazevedo-cloud/kiro-gate-2`)
 5. Enable "Auto Deploy" to automatically deploy on pushes to main branch
 
-### 4. Configure Environment Variables
+### 5. Configure Environment Variables
 In the Scalingo dashboard, go to "Environment" tab and add these variables:
 
 ```
@@ -35,18 +41,32 @@ LOG_LEVEL=INFO
 SERVER_HOST=0.0.0.0
 ```
 
-### 5. Manual Deployment (if auto-deploy is not enabled)
+### 6. Manual Deployment (if auto-deploy is not enabled)
 1. Go to "Deployment" tab
 2. Click "Manual Deploy"
 3. Select the branch to deploy (usually `main`)
 4. Click "Deploy"
 
-### 6. Configure Domain (Optional)
+### 7. Programmatic Deployment with API Tokens
+You can also deploy programmatically using the provided API tokens:
+
+1. **Create environment file**:
+   ```bash
+   cp .env.scalingo.example .env.scalingo
+   # Edit .env.scalingo with your actual values
+   ```
+
+2. **Deploy using the script**:
+   ```bash
+   source .env.scalingo && ./deploy_scalingo.sh
+   ```
+
+### 8. Configure Domain (Optional)
 1. Go to "Domains" tab
 2. Add a custom domain if desired
 3. Configure SSL certificate
 
-### 7. Monitoring and Logs
+### 9. Monitoring and Logs
 - Use "Logs" tab to monitor application output
 - Set up alerts in "Alerts" tab for monitoring
 - Check "Metrics" tab for resource usage
