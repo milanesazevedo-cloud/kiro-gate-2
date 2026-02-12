@@ -26,18 +26,32 @@ fi
 echo "🔑 Logging into Scalingo..."
 scalingo login --api-token "$SCALINGO_API_TOKEN"
 
-# Add remote if not already added
-echo "🔗 Adding Scalingo remote..."
-if ! git remote get-url scalingo &> /dev/null; then
-    echo "Creating new Scalingo app..."
-    scalingo create kiro-gateway
+# Check if app exists
+APP_NAME="kiro-gateway"
+echo "🔍 Checking if app '$APP_NAME' exists..."
+
+if scalingo --app "$APP_NAME" apps-info &>/dev/null; then
+    echo "✅ App '$APP_NAME' already exists"
 else
-    echo "Scalingo remote already exists"
+    echo "🏗️ App '$APP_NAME' does not exist, you'll need to create it manually in the Scalingo dashboard"
+    echo "   to avoid the free trial confirmation prompt."
+    echo ""
+    echo "📝 Instructions:"
+    echo "   1. Go to https://my.scalingo.com/apps"
+    echo "   2. Click 'Create App'"
+    echo "   3. Name it 'kiro-gateway'"
+    echo "   4. Select your preferred region"
+    echo "   5. Then run this script again"
+    exit 1
 fi
+
+# Add remote if not already added
+echo "🔗 Setting up Scalingo git remote..."
+scalingo git-setup --app "$APP_NAME"
 
 # Deploy to Scalingo
 echo "📦 Deploying to Scalingo..."
-scalingo git-push scalingo main
+git push scalingo main
 
 echo "✅ Deployment completed successfully!"
 
@@ -47,5 +61,5 @@ echo "   - PROXY_API_KEY"
 echo "   - REFRESH_TOKEN1 through REFRESH_TOKEN5"
 echo "   - Any other custom configuration"
 echo ""
-echo "2. Access your app at: https://kiro-gateway.scalingo.io"
-echo "3. Monitor logs with: scalingo logs -a kiro-gateway"
+echo "2. Access your app at: https://$APP_NAME.scalingo.io"
+echo "3. Monitor logs with: scalingo --app $APP_NAME logs"
