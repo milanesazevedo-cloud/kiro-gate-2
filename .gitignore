@@ -3,6 +3,7 @@
 .env.local
 .env.test
 .env.*.local
+.env.scalingo.local
 
 # IDE
 .vscode/
