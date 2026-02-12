@@ -36,6 +36,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.config import PROXY_API_KEY
+from kiro.rate_limit import limiter, INFERENCE_RATE_LIMIT
 from kiro.models_anthropic import (
     AnthropicMessagesRequest,
     AnthropicMessagesResponse,
@@ -115,6 +116,7 @@ router = APIRouter(tags=["Anthropic API"])
 
 
 @router.post("/v1/messages", dependencies=[Depends(verify_anthropic_api_key)])
+@limiter.limit(INFERENCE_RATE_LIMIT)
 async def messages(
     request: Request,
     request_data: AnthropicMessagesRequest,

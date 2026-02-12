@@ -39,6 +39,7 @@ from kiro.config import (
     PROXY_API_KEY,
     APP_VERSION,
 )
+from kiro.rate_limit import limiter, INFERENCE_RATE_LIMIT
 from kiro.models_openai import (
     OpenAIModel,
     ModelList,
@@ -153,6 +154,7 @@ async def get_models(request: Request):
 
 
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_api_key)])
+@limiter.limit(INFERENCE_RATE_LIMIT)
 async def chat_completions(request: Request, request_data: ChatCompletionRequest):
     """
     Chat completions endpoint - compatible with OpenAI API.

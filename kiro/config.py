@@ -515,6 +515,16 @@ FAKE_REASONING_INITIAL_BUFFER_SIZE: int = int(os.getenv("FAKE_REASONING_INITIAL_
 
 
 # ==================================================================================================
+# Rate Limiting
+# ==================================================================================================
+
+# Maximum requests per minute per IP address for inference endpoints.
+# Set to 0 to disable rate limiting entirely.
+# Default: 120 (generous for a personal proxy; two requests per second)
+RATE_LIMIT_RPM: int = int(os.getenv("RATE_LIMIT_RPM", "120"))
+
+
+# ==================================================================================================
 # Application Version
 # ==================================================================================================
 

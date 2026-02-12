@@ -47,10 +47,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from kiro.config import (
     APP_TITLE,
@@ -74,6 +78,7 @@ from kiro.config import (
     HIDDEN_FROM_LIST,
     FALLBACK_MODELS,
     VPN_PROXY_URL,
+    RATE_LIMIT_RPM,
     _warn_timeout_configuration,
 )
 from kiro.auth import KiroAuthManager, MultiTokenAuthManager
@@ -83,6 +88,7 @@ from kiro.routes_openai import router as openai_router
 from kiro.routes_anthropic import router as anthropic_router
 from kiro.exceptions import validation_exception_handler
 from kiro.debug_middleware import DebugLoggerMiddleware
+from kiro.rate_limit import limiter
 
 
 # --- Loguru Configuration ---
@@ -457,6 +463,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Attach limiter to app state (required by slowapi)
+app.state.limiter = limiter
+
 
 # --- CORS Middleware ---
 # Allow CORS for all origins to support browser clients
@@ -469,6 +478,13 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+# --- Rate Limit Middleware ---
+if RATE_LIMIT_RPM > 0:
+    app.add_middleware(SlowAPIMiddleware)
+    logger.info(f"Rate limiting enabled: {RATE_LIMIT_RPM} requests/minute per IP")
+else:
+    logger.info("Rate limiting disabled (RATE_LIMIT_RPM=0)")
+
 
 # --- Debug Logger Middleware ---
 # Initializes debug logging BEFORE Pydantic validation
@@ -476,8 +492,9 @@ app.add_middleware(
 app.add_middleware(DebugLoggerMiddleware)
 
 
-# --- Validation Error Handler Registration ---
+# --- Exception Handlers ---
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # --- Route Registration ---
