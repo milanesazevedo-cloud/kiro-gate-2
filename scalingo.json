@@ -1,0 +1,2 @@
+# Scalingo environment variables
+WEB_CONCURRENCY=1
