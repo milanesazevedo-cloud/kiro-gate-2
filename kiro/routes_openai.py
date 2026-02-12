@@ -248,7 +248,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             profile_arn_for_payload
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning(f"Payload build error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid request parameters")
     
     # Log Kiro payload
     try:
@@ -420,7 +421,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         # Flush debug logs on internal error ("errors" mode)
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # --- Multi-Account Status Endpoint ---

@@ -1586,7 +1586,7 @@ class TestChatCompletionsBuildPayloadError:
         )
 
         assert response.status_code == 400
-        assert "Invalid model configuration" in response.text
+        assert "Invalid request parameters" in response.text
 
 
 class TestChatCompletionsTruncationInRoute:
