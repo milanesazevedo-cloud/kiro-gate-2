@@ -237,7 +237,7 @@ class MultiTokenAuthManager:
         masked = self._mask_token(token.refresh_token)
         logger.debug(f"Refreshing token {index + 1}/{len(self._tokens)} (token: {masked})")
 
-        payload = {'refreshToken': token.refresh_token}
+        payload = {"refreshToken": token.refresh_token}
         headers = {
             "Content-Type": "application/json",
             "User-Agent": f"KiroGateway-{self._fingerprint[:16]}",
@@ -302,7 +302,7 @@ class MultiTokenAuthManager:
 
             logger.info(f"Refreshing token {self._active_index + 1}/{len(self._tokens)}...")
 
-            payload = {'refreshToken': token.refresh_token}
+            payload = {"refreshToken": token.refresh_token}
             headers = {
                 "Content-Type": "application/json",
                 "User-Agent": f"KiroGateway-{self._fingerprint[:16]}",

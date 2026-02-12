@@ -98,17 +98,17 @@ SERVER_PORT: int = int(os.getenv("SERVER_PORT", str(DEFAULT_SERVER_PORT)))
 
 # API key for proxy access (clients must pass it in Authorization header)
 # SECURITY: Must be configured by user - no default value for security
-_PROXY_API_KEY_ENV = os.getenv("PROXY_API_KEY")
-if _PROXY_API_KEY_ENV is None:
+PROXY_API_KEY = os.getenv("PROXY_API_KEY")
+if PROXY_API_KEY is None:
     raise ValueError(
         "PROXY_API_KEY environment variable must be set. "
         "Copy .env.example to .env and configure your API key."
     )
-if len(_PROXY_API_KEY_ENV) < 16:
+if len(PROXY_API_KEY) < 16:
     raise ValueError(
         "PROXY_API_KEY must be at least 16 characters long for security."
     )
-PROXY_API_KEY: str = _PROXY_API_KEY_ENV
+PROXY_API_KEY: str = PROXY_API_KEY
 
 # ==================================================================================================
 # VPN/Proxy Settings for Kiro API Access
