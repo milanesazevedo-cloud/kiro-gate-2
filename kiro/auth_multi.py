@@ -405,13 +405,10 @@ class MultiTokenAuthManager:
             if self._active_requests > 0:
                 self._active_requests -= 1
             
-            logger.debug(f"Request completed: active_requests={self._active_requests}, request_counter={self._request_counter}")
-            
             # Only rotate if no other requests are active
             if self._active_requests == 0 and len(self._tokens) > 1:
                 # Increment request counter and check if we need to rotate
                 self._request_counter += 1
-                logger.debug(f"Incremented request counter to {self._request_counter}/{self._requests_per_account}")
                 if self._request_counter >= self._requests_per_account:
                     # Rotate to next account
                     if self._rotate_to_next_token():
