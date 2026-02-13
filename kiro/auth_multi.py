@@ -88,6 +88,7 @@ class MultiTokenAuthManager:
     - Exponential backoff for failed tokens (5min, 30min, 2h)
     - Background refresh to keep all tokens healthy
     - Health status monitoring
+    - Request-based account rotation (rotate every 3 requests)
 
     Example:
         >>> auth_manager = MultiTokenAuthManager(
@@ -121,6 +122,10 @@ class MultiTokenAuthManager:
 
         # Current active token index
         self._active_index = 0 if self._tokens else -1
+
+        # Request counter for account rotation
+        self._request_counter = 0
+        self._requests_per_account = 3  # Rotate every 3 requests
 
         self._profile_arn = profile_arn
         self._region = region
@@ -367,8 +372,20 @@ class MultiTokenAuthManager:
     async def get_access_token(self) -> str:
         """
         Get valid access token from active token, refreshing if needed.
+        
+        Implements request-based account rotation:
+        - Rotates to next account every 3 requests
+        - Refreshes token if expiring soon
         """
         async with self._lock:
+            # Increment request counter and check if we need to rotate accounts
+            self._request_counter += 1
+            if self._request_counter >= self._requests_per_account and len(self._tokens) > 1:
+                # Rotate to next account
+                if self._rotate_to_next_token():
+                    logger.info(f"Rotated to next account after {self._request_counter} requests")
+                self._request_counter = 0  # Reset counter after rotation
+            
             token = self._get_active_token()
             if not token or not token.access_token or self.is_token_expiring_soon():
                 await self._refresh_token_request()
@@ -380,12 +397,14 @@ class MultiTokenAuthManager:
             return token.access_token
 
     async def force_refresh(self) -> str:
-        """Force refresh the active token."""
+        """Force refresh the active token and reset request counter."""
         async with self._lock:
             await self._refresh_token_request()
             token = self._get_active_token()
             if not token or not token.access_token:
                 raise ValueError("Failed to obtain access token after refresh")
+            # Reset request counter after manual refresh
+            self._request_counter = 0
             return token.access_token
 
     async def refresh_all_tokens(self) -> dict:
