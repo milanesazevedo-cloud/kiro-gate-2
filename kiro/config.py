@@ -190,9 +190,9 @@ REFRESH_TOKENS: list = _parse_refresh_tokens()
 REFRESH_TOKEN: str = REFRESH_TOKENS[0] if REFRESH_TOKENS else ""
 
 # Background refresh interval for multi-account mode (seconds)
-# Default: 600 seconds (10 minutes) - more aggressive to prevent token expiry during requests
+# Increased from 600 to 1200 seconds (20 minutes) to reduce aggressive background refreshing
 # Tokens expire in ~60 minutes, so we refresh well before that
-BACKGROUND_REFRESH_INTERVAL: int = int(os.getenv("BACKGROUND_REFRESH_INTERVAL", "600"))
+BACKGROUND_REFRESH_INTERVAL: int = int(os.getenv("BACKGROUND_REFRESH_INTERVAL", "1200"))  # 20 minutes instead of 10 minutes
 
 # Profile ARN for AWS CodeWhisperer
 PROFILE_ARN: str = os.getenv("PROFILE_ARN", "")
@@ -237,8 +237,9 @@ KIRO_Q_HOST_TEMPLATE: str = "https://q.{region}.amazonaws.com"
 # ==================================================================================================
 
 # Time before token expiration when refresh is needed (in seconds)
-# Default 10 minutes - refresh token in advance to avoid errors
-TOKEN_REFRESH_THRESHOLD: int = 600
+# Increased from 600 to 1800 seconds (30 minutes) to reduce aggressive refreshing
+# Tokens typically expire in ~60 minutes, so we refresh well before that
+TOKEN_REFRESH_THRESHOLD: int = 1800  # 30 minutes instead of 10 minutes
 
 # ==================================================================================================
 # Connection Pool Configuration
@@ -261,12 +262,14 @@ HTTP_POOL_KEEPALIVE_EXPIRY: float = float(os.getenv("HTTP_POOL_KEEPALIVE_EXPIRY"
 # ==================================================================================================
 
 # Maximum number of retry attempts on errors
+# Reduced from 12 to 5 to prevent excessive retrying which can cause rate limiting
 # Increased from 3 to 5 to better handle transient network issues and PoolTimeout errors
-MAX_RETRIES: int = 12
+MAX_RETRIES: int = 5
 
 # Base delay between attempts (seconds)
 # Uses exponential backoff: delay * (2 ** attempt)
-BASE_RETRY_DELAY: float = 3.0
+# Reduced from 3.0 to 1.5 to prevent overly long waits
+BASE_RETRY_DELAY: float = 1.5
 
 # ==================================================================================================
 # Hidden Models Configuration
@@ -418,19 +421,22 @@ FIRST_TOKEN_TIMEOUT: float = float(os.getenv("FIRST_TOKEN_TIMEOUT", "15"))
 # This is the maximum time to wait for data between chunks during streaming.
 # Should be longer than FIRST_TOKEN_TIMEOUT since the model may pause between chunks
 # while "thinking" (especially for tool calls or complex reasoning).
-# Default: 300 seconds (5 minutes) - generous timeout to avoid premature disconnects.
-STREAMING_READ_TIMEOUT: float = float(os.getenv("STREAMING_READ_TIMEOUT", "1800"))
+# Increased from 300 to 600 seconds (10 minutes) to allow for longer thinking periods
+# Default: 600 seconds (10 minutes) - generous timeout to avoid premature disconnects.
+STREAMING_READ_TIMEOUT: float = float(os.getenv("STREAMING_READ_TIMEOUT", "600"))
 
 # Expected streaming duration buffer (seconds).
 # When starting a streaming request, we ensure the token is valid for at least this
 # much longer than STREAMING_READ_TIMEOUT to account for token expiration during streaming.
-# Default: 600 seconds (10 minutes) - enough buffer for long-running requests.
-STREAMING_TOKEN_BUFFER: float = float(os.getenv("STREAMING_TOKEN_BUFFER", "1800"))
+# Reduced from 1800 to 900 seconds (15 minutes) to balance safety with efficiency
+# Default: 900 seconds (15 minutes) - enough buffer for long-running requests.
+STREAMING_TOKEN_BUFFER: float = float(os.getenv("STREAMING_TOKEN_BUFFER", "900"))
 
 # Maximum number of attempts on first token timeout.
 # After exhausting all attempts, an error will be returned.
+# Reduced from 8 to 3 to prevent excessive retrying which can cause rate limiting
 # Default: 3 attempts
-FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "8"))
+FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "3"))
 
 # ==================================================================================================
 # Debug Settings
