@@ -324,16 +324,16 @@ async def lifespan(app: FastAPI):
     # This reduces memory usage and enables connection reuse across requests
     # Limits: max 100 total connections, max 20 keep-alive connections
     limits = httpx.Limits(
-        max_connections=100,
-        max_keepalive_connections=20,
-        keepalive_expiry=30.0  # Close idle connections after 30 seconds
+        max_connections=1000,
+        max_keepalive_connections=200,
+        keepalive_expiry=1800.0  # Close idle connections after 30 minutes
     )
     # Timeout configuration for streaming (long read timeout for model "thinking")
     timeout = httpx.Timeout(
-        connect=30.0,
+        connect=120.0,
         read=STREAMING_READ_TIMEOUT,  # 300 seconds for streaming
-        write=30.0,
-        pool=30.0
+        write=120.0,
+        pool=120.0
     )
     app.state.http_client = httpx.AsyncClient(
         limits=limits,

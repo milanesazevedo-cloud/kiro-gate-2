@@ -262,11 +262,11 @@ HTTP_POOL_KEEPALIVE_EXPIRY: float = float(os.getenv("HTTP_POOL_KEEPALIVE_EXPIRY"
 
 # Maximum number of retry attempts on errors
 # Increased from 3 to 5 to better handle transient network issues and PoolTimeout errors
-MAX_RETRIES: int = 8
+MAX_RETRIES: int = 12
 
 # Base delay between attempts (seconds)
 # Uses exponential backoff: delay * (2 ** attempt)
-BASE_RETRY_DELAY: float = 1.0
+BASE_RETRY_DELAY: float = 3.0
 
 # ==================================================================================================
 # Hidden Models Configuration
@@ -316,7 +316,7 @@ HIDDEN_MODELS: Dict[str, str] = {
 #
 # Default: {"auto-kiro": "auto"} to avoid Cursor IDE conflict
 MODEL_ALIASES: Dict[str, str] = {
-    "auto-kiro": "auto",  # Default alias to avoid Cursor's "auto" model conflict
+    
 }
 
 # Models to hide from /v1/models endpoint.
@@ -329,7 +329,7 @@ MODEL_ALIASES: Dict[str, str] = {
 #   HIDDEN_FROM_LIST = ["auto", "claude-old-model"]
 #
 # Default: ["auto"] to show only "auto-kiro" alias
-HIDDEN_FROM_LIST: List[str] = ["auto"]
+HIDDEN_FROM_LIST: List[str] = []
 
 # ==================================================================================================
 # Fallback Models Configuration (DNS Failure Recovery)
@@ -419,18 +419,18 @@ FIRST_TOKEN_TIMEOUT: float = float(os.getenv("FIRST_TOKEN_TIMEOUT", "15"))
 # Should be longer than FIRST_TOKEN_TIMEOUT since the model may pause between chunks
 # while "thinking" (especially for tool calls or complex reasoning).
 # Default: 300 seconds (5 minutes) - generous timeout to avoid premature disconnects.
-STREAMING_READ_TIMEOUT: float = float(os.getenv("STREAMING_READ_TIMEOUT", "300"))
+STREAMING_READ_TIMEOUT: float = float(os.getenv("STREAMING_READ_TIMEOUT", "1800"))
 
 # Expected streaming duration buffer (seconds).
 # When starting a streaming request, we ensure the token is valid for at least this
 # much longer than STREAMING_READ_TIMEOUT to account for token expiration during streaming.
 # Default: 600 seconds (10 minutes) - enough buffer for long-running requests.
-STREAMING_TOKEN_BUFFER: float = float(os.getenv("STREAMING_TOKEN_BUFFER", "600"))
+STREAMING_TOKEN_BUFFER: float = float(os.getenv("STREAMING_TOKEN_BUFFER", "1800"))
 
 # Maximum number of attempts on first token timeout.
 # After exhausting all attempts, an error will be returned.
 # Default: 3 attempts
-FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "3"))
+FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "8"))
 
 # ==================================================================================================
 # Debug Settings
@@ -538,7 +538,7 @@ FAKE_REASONING_INITIAL_BUFFER_SIZE: int = int(os.getenv("FAKE_REASONING_INITIAL_
 # Maximum requests per minute per IP address for inference endpoints.
 # Set to 0 to disable rate limiting entirely.
 # Default: 120 (generous for a personal proxy; two requests per second)
-RATE_LIMIT_RPM: int = int(os.getenv("RATE_LIMIT_RPM", "120"))
+RATE_LIMIT_RPM: int = int(os.getenv("RATE_LIMIT_RPM", "0"))
 
 
 # ==================================================================================================

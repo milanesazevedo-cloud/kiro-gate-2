@@ -135,23 +135,23 @@ class KiroHttpClient:
                 # - read: STREAMING_READ_TIMEOUT (300 sec) - model may "think" between chunks
                 # - write/pool: standard values
                 timeout_config = httpx.Timeout(
-                    connect=30.0,
-                    read=STREAMING_READ_TIMEOUT,
-                    write=30.0,
-                    pool=30.0
+                    connect=60.0,
+                    read=600.0,
+                    write=120.0,
+                    pool=120.0
                 )
                 logger.debug(f"Creating streaming HTTP client (read_timeout={STREAMING_READ_TIMEOUT}s)")
             else:
                 # For regular requests: single timeout of 300 sec
-                timeout_config = httpx.Timeout(timeout=300.0)
+                timeout_config = httpx.Timeout(timeout=1200.0)
                 logger.debug("Creating non-streaming HTTP client (timeout=300s)")
             
             # Enhanced connection pool configuration to prevent PoolTimeout errors
             # Increased limits to handle concurrent requests from multiple accounts
             limits = httpx.Limits(
-                max_connections=HTTP_POOL_MAX_CONNECTIONS,          # Total connections in pool
-                max_keepalive_connections=HTTP_POOL_MAX_KEEPALIVE,   # Keep-alive connections
-                keepalive_expiry=HTTP_POOL_KEEPALIVE_EXPIRY         # Keep connections alive (seconds)
+                max_connections=1000,          # Total connections in pool
+                max_keepalive_connections=200,   # Keep-alive connections
+                keepalive_expiry=1200.0         # Keep connections alive (seconds)
             )
             
             self.client = httpx.AsyncClient(
