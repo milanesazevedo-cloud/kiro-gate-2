@@ -74,6 +74,7 @@ async def mark_request_completed_safe(auth_manager) -> None:
     if hasattr(auth_manager, 'mark_request_completed'):
         try:
             await auth_manager.mark_request_completed()
+            logger.debug("Request marked as completed for rotation tracking")
         except Exception as e:
             logger.debug(f"Error marking request completed: {e}")
 
