@@ -127,6 +127,7 @@ class MultiTokenAuthManager:
         self._request_counter = 0
         self._requests_per_account = 3  # Rotate every 3 requests
         self._active_requests = 0  # Track active requests to prevent rotation during streams
+        self._completed_requests = 0  # Track completed requests for rotation
 
         self._profile_arn = profile_arn
         self._region = region
@@ -401,18 +402,17 @@ class MultiTokenAuthManager:
             if self._active_requests > 0:
                 self._active_requests -= 1
             
-            logger.info(f" mark_request_completed: active={self._active_requests}, counter={self._request_counter}")
+            # Track completed requests for rotation
+            self._completed_requests += 1
             
-            # Only rotate if no other requests are active
-            if self._active_requests == 0 and len(self._tokens) > 1:
-                # Increment request counter and check if we need to rotate
-                self._request_counter += 1
-                logger.info(f" Incremented counter to {self._request_counter}/{self._requests_per_account}")
-                if self._request_counter >= self._requests_per_account:
-                    # Rotate to next account
-                    if self._rotate_to_next_token():
-                        logger.info(f" ROTATED to account {self._active_index + 1} after {self._request_counter} requests")
-                    self._request_counter = 0  # Reset counter after rotation
+            logger.info(f" mark_request_completed: active={self._active_requests}, completed={self._completed_requests}")
+            
+            # Rotate every N completed requests (regardless of active requests)
+            if self._completed_requests >= self._requests_per_account and len(self._tokens) > 1:
+                # Rotate to next account
+                if self._rotate_to_next_token():
+                    logger.info(f" ROTATED to account {self._active_index + 1} after {self._completed_requests} completed requests")
+                self._completed_requests = 0  # Reset counter after rotation
 
     async def force_refresh(self) -> str:
         """Force refresh the active token and reset request counter."""
