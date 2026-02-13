@@ -415,14 +415,13 @@ class MultiTokenAuthManager:
                 self._completed_requests = 0  # Reset counter after rotation
 
     async def force_refresh(self) -> str:
-        """Force refresh the active token and reset request counter."""
+        """Force refresh the active token."""
         async with self._lock:
             await self._refresh_token_request()
             token = self._get_active_token()
             if not token or not token.access_token:
                 raise ValueError("Failed to obtain access token after refresh")
-            # Reset request counter after manual refresh
-            self._request_counter = 0
+            # NOTE: Do NOT reset request counter here - it prevents rotation
             return token.access_token
 
     async def refresh_all_tokens(self) -> dict:
