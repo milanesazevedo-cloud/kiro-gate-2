@@ -43,7 +43,7 @@ from kiro.models_anthropic import (
     AnthropicErrorResponse,
     AnthropicErrorDetail,
 )
-from kiro.auth import KiroAuthManager, AuthType
+from kiro.auth import KiroAuthManager, MultiTokenAuthManager, AuthType
 from kiro.cache import ModelInfoCache
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.streaming_anthropic import (
@@ -59,6 +59,24 @@ try:
     from kiro.debug_logger import debug_logger
 except ImportError:
     debug_logger = None
+
+
+async def mark_request_completed_safe(auth_manager) -> None:
+    """
+    Safely mark a request as completed for multi-account rotation.
+    
+    This function checks if the auth_manager has the mark_request_completed
+    method (only available in MultiTokenAuthManager) and calls it.
+    This prevents rotation from interfering with ongoing streaming requests.
+    
+    Args:
+        auth_manager: The auth manager instance (KiroAuthManager or MultiTokenAuthManager)
+    """
+    if hasattr(auth_manager, 'mark_request_completed'):
+        try:
+            await auth_manager.mark_request_completed()
+        except Exception as e:
+            logger.debug(f"Error marking request completed: {e}")
 
 
 # --- Security scheme ---
@@ -402,6 +420,9 @@ async def messages(
                             debug_logger.flush_on_error(500, str(streaming_error))
                         else:
                             debug_logger.discard_buffers()
+                    
+                    # Mark request as completed for multi-account rotation
+                    await mark_request_completed_safe(auth_manager)
             
             return StreamingResponse(
                 stream_wrapper(),
@@ -429,6 +450,9 @@ async def messages(
             if debug_logger:
                 debug_logger.discard_buffers()
             
+            # Mark request as completed for multi-account rotation
+            await mark_request_completed_safe(auth_manager)
+            
             return JSONResponse(content=anthropic_response)
     
     except HTTPException as e:
@@ -436,6 +460,8 @@ async def messages(
         logger.error(f"HTTP {e.status_code} - POST /v1/messages - {e.detail}")
         if debug_logger:
             debug_logger.flush_on_error(e.status_code, str(e.detail))
+        # Mark request as completed even on error
+        await mark_request_completed_safe(auth_manager)
         raise
     except Exception as e:
         await http_client.close()
@@ -443,6 +469,8 @@ async def messages(
         logger.error(f"HTTP 500 - POST /v1/messages - {str(e)[:100]}")
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))
+        # Mark request as completed even on error
+        await mark_request_completed_safe(auth_manager)
         
         return JSONResponse(
             status_code=500,

@@ -126,6 +126,7 @@ class MultiTokenAuthManager:
         # Request counter for account rotation
         self._request_counter = 0
         self._requests_per_account = 3  # Rotate every 3 requests
+        self._active_requests = 0  # Track active requests to prevent rotation during streams
 
         self._profile_arn = profile_arn
         self._region = region
@@ -373,18 +374,12 @@ class MultiTokenAuthManager:
         """
         Get valid access token from active token, refreshing if needed.
         
-        Implements request-based account rotation:
-        - Rotates to next account every 3 requests
-        - Refreshes token if expiring soon
+        Note: Rotation happens in mark_request_completed(), not here,
+        to avoid interfering with ongoing streaming requests.
         """
         async with self._lock:
-            # Increment request counter and check if we need to rotate accounts
-            self._request_counter += 1
-            if self._request_counter >= self._requests_per_account and len(self._tokens) > 1:
-                # Rotate to next account
-                if self._rotate_to_next_token():
-                    logger.info(f"Rotated to next account after {self._request_counter} requests")
-                self._request_counter = 0  # Reset counter after rotation
+            # Track active request to prevent rotation during streams
+            self._active_requests += 1
             
             token = self._get_active_token()
             if not token or not token.access_token or self.is_token_expiring_soon():
@@ -395,6 +390,29 @@ class MultiTokenAuthManager:
                 raise ValueError("Failed to obtain access token")
 
             return token.access_token
+    
+    async def mark_request_completed(self) -> None:
+        """
+        Mark a request as completed and potentially rotate accounts.
+        
+        This should be called after each request completes (success or failure).
+        The rotation happens here instead of in get_access_token() to avoid
+        interfering with ongoing streaming requests.
+        """
+        async with self._lock:
+            # Decrement active request counter
+            if self._active_requests > 0:
+                self._active_requests -= 1
+            
+            # Only rotate if no other requests are active
+            if self._active_requests == 0 and len(self._tokens) > 1:
+                # Increment request counter and check if we need to rotate
+                self._request_counter += 1
+                if self._request_counter >= self._requests_per_account:
+                    # Rotate to next account
+                    if self._rotate_to_next_token():
+                        logger.info(f"Rotated to next account after {self._request_counter} requests")
+                    self._request_counter = 0  # Reset counter after rotation
 
     async def force_refresh(self) -> str:
         """Force refresh the active token and reset request counter."""
