@@ -395,24 +395,23 @@ class MultiTokenAuthManager:
     async def mark_request_completed(self) -> None:
         """
         Mark a request as completed and potentially rotate accounts.
-        
-        This should be called after each request completes (success or failure).
-        The rotation happens here instead of in get_access_token() to avoid
-        interfering with ongoing streaming requests.
         """
         async with self._lock:
             # Decrement active request counter
             if self._active_requests > 0:
                 self._active_requests -= 1
             
+            logger.info(f" mark_request_completed: active={self._active_requests}, counter={self._request_counter}")
+            
             # Only rotate if no other requests are active
             if self._active_requests == 0 and len(self._tokens) > 1:
                 # Increment request counter and check if we need to rotate
                 self._request_counter += 1
+                logger.info(f" Incremented counter to {self._request_counter}/{self._requests_per_account}")
                 if self._request_counter >= self._requests_per_account:
                     # Rotate to next account
                     if self._rotate_to_next_token():
-                        logger.info(f"Rotated to next account after {self._request_counter} requests")
+                        logger.info(f" ROTATED to account {self._active_index + 1} after {self._request_counter} requests")
                     self._request_counter = 0  # Reset counter after rotation
 
     async def force_refresh(self) -> str:

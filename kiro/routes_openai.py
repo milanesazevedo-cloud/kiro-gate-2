@@ -61,23 +61,14 @@ except ImportError:
 
 
 async def mark_request_completed_safe(auth_manager) -> None:
-    """
-    Safely mark a request as completed for multi-account rotation.
-    
-    This function checks if the auth_manager has the mark_request_completed
-    method (only available in MultiTokenAuthManager) and calls it.
-    This prevents rotation from interfering with ongoing streaming requests.
-    
-    Args:
-        auth_manager: The auth manager instance (KiroAuthManager or MultiTokenAuthManager)
-    """
+    """Mark request completed for rotation tracking."""
     if hasattr(auth_manager, 'mark_request_completed'):
         try:
             await auth_manager.mark_request_completed()
         except Exception as e:
-            logger.debug(f"Error marking request completed: {e}")
+            logger.warning(f"Error in mark_request_completed: {e}")
     else:
-        logger.debug("auth_manager does not have mark_request_completed method")
+        logger.warning("auth_manager missing mark_request_completed method")
 
 
 # --- Security scheme ---
