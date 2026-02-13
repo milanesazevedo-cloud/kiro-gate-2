@@ -241,11 +241,28 @@ KIRO_Q_HOST_TEMPLATE: str = "https://q.{region}.amazonaws.com"
 TOKEN_REFRESH_THRESHOLD: int = 600
 
 # ==================================================================================================
+# Connection Pool Configuration
+# ==================================================================================================
+
+# Maximum number of concurrent connections in the HTTP connection pool
+# Increased to handle high concurrent request loads from multiple accounts
+HTTP_POOL_MAX_CONNECTIONS: int = int(os.getenv("HTTP_POOL_MAX_CONNECTIONS", "200"))
+
+# Maximum number of keep-alive connections in the pool
+# Helps reduce connection overhead for repeated requests
+HTTP_POOL_MAX_KEEPALIVE: int = int(os.getenv("HTTP_POOL_MAX_KEEPALIVE", "50"))
+
+# How long to keep idle connections alive (seconds)
+# Balance between resource usage and connection reuse efficiency
+HTTP_POOL_KEEPALIVE_EXPIRY: float = float(os.getenv("HTTP_POOL_KEEPALIVE_EXPIRY", "300"))
+
+# ==================================================================================================
 # Retry Configuration
 # ==================================================================================================
 
 # Maximum number of retry attempts on errors
-MAX_RETRIES: int = 3
+# Increased from 3 to 5 to better handle transient network issues and PoolTimeout errors
+MAX_RETRIES: int = 5
 
 # Base delay between attempts (seconds)
 # Uses exponential backoff: delay * (2 ** attempt)

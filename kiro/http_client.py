@@ -37,7 +37,12 @@ import httpx
 from fastapi import HTTPException
 from loguru import logger
 
-from kiro.config import MAX_RETRIES, BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, STREAMING_READ_TIMEOUT, STREAMING_TOKEN_BUFFER
+from kiro.config import (
+    MAX_RETRIES, BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, 
+    STREAMING_READ_TIMEOUT, STREAMING_TOKEN_BUFFER,
+    HTTP_POOL_MAX_CONNECTIONS, HTTP_POOL_MAX_KEEPALIVE, 
+    HTTP_POOL_KEEPALIVE_EXPIRY
+)
 from kiro.auth import KiroAuthManager
 from kiro.utils import get_kiro_headers
 from kiro.network_errors import classify_network_error, get_short_error_message, NetworkErrorInfo
@@ -141,7 +146,19 @@ class KiroHttpClient:
                 timeout_config = httpx.Timeout(timeout=300.0)
                 logger.debug("Creating non-streaming HTTP client (timeout=300s)")
             
-            self.client = httpx.AsyncClient(timeout=timeout_config, follow_redirects=True)
+            # Enhanced connection pool configuration to prevent PoolTimeout errors
+            # Increased limits to handle concurrent requests from multiple accounts
+            limits = httpx.Limits(
+                max_connections=HTTP_POOL_MAX_CONNECTIONS,          # Total connections in pool
+                max_keepalive_connections=HTTP_POOL_MAX_KEEPALIVE,   # Keep-alive connections
+                keepalive_expiry=HTTP_POOL_KEEPALIVE_EXPIRY         # Keep connections alive (seconds)
+            )
+            
+            self.client = httpx.AsyncClient(
+                timeout=timeout_config,
+                limits=limits,
+                follow_redirects=True
+            )
         return self.client
     
     async def close(self) -> None:
@@ -269,14 +286,33 @@ class KiroHttpClient:
                 # Log with user-friendly message
                 short_msg = get_short_error_message(error_info)
                 
+                # Special handling for PoolTimeout - use longer delays and more retries
+                is_pool_timeout = isinstance(e, httpx.PoolTimeout)
+                max_delay_for_pool = 10.0  # Cap max delay for pool timeouts
+                
                 if error_info.is_retryable and attempt < max_retries - 1:
-                    delay = BASE_RETRY_DELAY * (2 ** attempt)
-                    logger.warning(f"{short_msg} - waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+                    # Calculate delay with exponential backoff
+                    base_delay = BASE_RETRY_DELAY * (2 ** attempt)
+                    
+                    # For PoolTimeout, use shorter delays but more aggressive retry
+                    if is_pool_timeout:
+                        # PoolTimeout often indicates server overload - shorter, randomized delays
+                        delay = min(base_delay * 0.5, max_delay_for_pool)  # Reduced delay
+                        # Add jitter to prevent thundering herd
+                        delay = delay * (0.8 + 0.4 * (attempt / max_retries))  # Adaptive jitter
+                    else:
+                        delay = base_delay
+                    
+                    logger.warning(f"{short_msg} - waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(delay)
                 else:
+                    # Final attempt failed - log error and raise HTTPException
                     logger.error(f"{short_msg} - no more retries (attempt {attempt + 1}/{max_retries})")
-                    if not error_info.is_retryable:
-                        break  # Don't retry non-retryable errors
+                    raise HTTPException(
+                        status_code=error_info.suggested_http_code,
+                        detail=f"{error_info.user_message}\n\nTroubleshooting:\n" + 
+                               "\n".join([f"{i+1}. {step}" for i, step in enumerate(error_info.troubleshooting_steps)])
+                    ) from e
                 
             except httpx.RequestError as e:
                 last_error = e

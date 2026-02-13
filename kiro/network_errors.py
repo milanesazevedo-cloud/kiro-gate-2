@@ -52,6 +52,8 @@ class ErrorCategory(str, Enum):
     NETWORK_UNREACHABLE = "network_unreachable"
     TIMEOUT_CONNECT = "timeout_connect"
     TIMEOUT_READ = "timeout_read"
+    TIMEOUT_WRITE = "timeout_write"
+    TIMEOUT_POOL = "timeout_pool"
     SSL_ERROR = "ssl_error"
     PROXY_ERROR = "proxy_error"
     TOO_MANY_REDIRECTS = "too_many_redirects"
@@ -307,6 +309,22 @@ def _classify_timeout_error(error: httpx.TimeoutException, technical_details: st
     Returns:
         NetworkErrorInfo with specific classification
     """
+    # PoolTimeout: Timed out waiting to acquire a connection from the pool
+    if isinstance(error, httpx.PoolTimeout):
+        return NetworkErrorInfo(
+            category=ErrorCategory.TIMEOUT_POOL,
+            user_message="Connection pool timeout - server is overwhelmed with requests.",
+            troubleshooting_steps=[
+                "The server is experiencing high load",
+                "Try again in a few moments",
+                "Reduce the number of concurrent requests",
+                "Consider implementing request queuing or rate limiting"
+            ],
+            technical_details=technical_details,
+            is_retryable=True,
+            suggested_http_code=503  # Service Unavailable - appropriate for pool exhaustion
+        )
+    
     # ConnectTimeout: TCP handshake timeout
     if isinstance(error, httpx.ConnectTimeout):
         return NetworkErrorInfo(
@@ -333,6 +351,21 @@ def _classify_timeout_error(error: httpx.TimeoutException, technical_details: st
                 "Check your internet connection stability",
                 "Try again with a simpler request",
                 "The service may be experiencing high load"
+            ],
+            technical_details=technical_details,
+            is_retryable=True,
+            suggested_http_code=504
+        )
+    
+    # WriteTimeout: Client stopped sending data
+    if isinstance(error, httpx.WriteTimeout):
+        return NetworkErrorInfo(
+            category=ErrorCategory.TIMEOUT_WRITE,
+            user_message="Write timeout - client stopped sending data to server.",
+            troubleshooting_steps=[
+                "Check your internet connection stability",
+                "Large request payloads may be taking too long to upload",
+                "Try reducing the size of your request"
             ],
             technical_details=technical_details,
             is_retryable=True,
